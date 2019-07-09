@@ -9,23 +9,28 @@ Connect to remote slave:
 
 ```
 import remex
-cmder = SlaveCmder(ip="127.0.0.1", port=5001)
+cmder = remex.SlaveCmder(ip="127.0.0.1", port=5001)
 await cmder.connect()
 ```
 
 Run a coroutine on a different machine and return result: 
 ```
-result = await remex.exec(None, fun, *args, **kwargs)
+result = await cmder.exec(None, "fun", *args, **kwargs)
 ```
 
 Create an object on the slave node on the local proxy:
 ```
-proxy = await remex.create(cls, *args, **kwargs)
+proxy = await cmder.create(cls, *args, **kwargs)
 ```
 
 Get the value of an attribute:
 ```
-value = await remex.getattr(obj, )
+value = await cmder.getattr(proxy, "some_attr")
+```
+
+Run a coroutine method:
+```
+result = await cmder.exec(proxy, "fun", *args, **kwargs)
 ```
 
 You can also run methods which are coroutine functions directly:
