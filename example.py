@@ -11,6 +11,7 @@ class PC:
     async def run(self, dst):
         print(f"Sending packets from {self.ip} to {dst}")
         await asyncio.sleep(1)
+        self.ip = None
 
 
 async def main():
@@ -30,6 +31,11 @@ async def main():
     # high-level API with proxy object
     proxy_pc = await cmder.create("PC", ip="127.0.0.1")
     await proxy_pc.run(dst="DST")
+
+    ip = await proxy_pc.getattr("ip")
+    print(ip)
+
+    await proxy_pc.sync()
 
 
 if __name__ == "__main__":

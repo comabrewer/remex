@@ -24,8 +24,17 @@ class Proxy:
         self.remex = remex
         self.__dict__.update(state)
 
-   def __getattr__(self, attr):
-       return functools.partial(self.remex.exec, fn_name=attr, obj_id=self.obj_id)
+    async def getattr(self, attr):
+        value = await self.remex.exec(self.obj_id, attr)
+        return value
+
+    async def sync(self):
+        state = await self.getattr("__dict__")
+        self.__dict__.update(state)
+
+    def __getattr__(self, attr):
+        # TODO: check if method original class is coroutine funtion
+        return functools.partial(self.remex.exec, obj_id=self.obj_id, fn_name=attr)
 
 
 class RemoteCmder:
@@ -66,14 +75,16 @@ class RemoteCmder:
 
         if response["type"] == "exception":
             raise Exception(response["data"])
-        elif response["type"] == "result":
+        elif response["type"] == "value":
             return response["data"]
-        elif response["type"] == "remote":
+        elif response["type"] == "object":
             data = response["data"]
+            # TODO: find original class
             proxy = Proxy(data["class"], data["obj_id"], data["state"], self)
             return proxy
 
     async def create(self, cls_name, *args, **kwargs):
+        # TODO: check if class is remotable
         proxy = await self.exec(None, cls_name, *args, **kwargs)
         return proxy
 

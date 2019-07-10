@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from types import SimpleNamespace
 import json
 
@@ -40,45 +41,57 @@ class RemoteSlave:
             data = await reader.readuntil()
             request = json.loads(data.decode())
             response = await self.exec(request)
-            writer.write(json.dumps(response).encode() + b"\n")
+            response_data = json.dumps(response).encode()
+            writer.write(response_data + b"\n")
             await writer.drain()
 
     async def exec(self, request):
         request = SimpleNamespace(**request)
         if request.obj_id is None:
-            coroutine = self._make_async(globals()[request.fn_name], *request.args, **request.kwargs)
+            fn_obj = globals()[request.fn_name]
         else:
             obj = self._objs[request.obj_id]
-            coroutine = getattr(obj, request.fn_name)(*request.args, **request.kwargs)
+            fn_obj = getattr(obj, request.fn_name)
+
+        if inspect.iscoroutinefunction(fn_obj):
+            cr_obj = fn_obj(*request.args, **request.kwargs)
+        elif inspect.isroutine(fn_obj) or inspect.isclass(fn_obj):
+            async def coroutine():
+                return fn_obj(*request.args, **request.kwargs)
+            cr_obj = coroutine()
+        else:
+            async def coroutine():
+                return fn_obj
+            cr_obj = coroutine()
+
         try:
-            result = await coroutine
+            result = await cr_obj
         except Exception as exc:
             response = {"type": "exception", "data": str(exc)}
         else:
-            if self._is_remotable(result):
-                print("foo")
+            if self._is_json_serializable(result):
+                response = {"type": "value", "data": result}
+            else:
                 result_id = id(result)
                 self._objs[result_id] = result
                 response = {
-                    "type": "remote",
+                    "type": "object",
                     "data": {
-                        "class": str(type(result)),
+                        "class": type(result).__name__,
                         "obj_id": result_id,
-                        "state": vars(result)
+                        "state": {} #vars(result)
                     }
                 }
-            else:
-                response = {"type": "result", "data": result}
         response["tid"] = request.tid
         return response
 
-    def _is_remotable(self, obj):
+    def _is_json_serializable(self, obj):
         try:
             json.dumps(obj)
         except TypeError:
-            return True
-        else:
             return False
+        else:
+            return True
 
     async def _make_async(self, fun, *args, **kwargs):
         return fun(*args, **kwargs)
